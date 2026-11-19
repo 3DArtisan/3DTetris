@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tetris</title>
+<style>
+  /* ===== ASPECTUL PAGINII (CSS) ===== */
+  body {
+    margin: 0;
+    background: #1a1a2e;
+    color: #eee;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 { margin: 16px 0 8px; letter-spacing: 4px; }
+  .joc { display: flex; gap: 20px; align-items: flex-start; }
+  canvas { background: #000; border: 2px solid #555; }
+  .panou { min-width: 140px; }
+  .panou p { margin: 6px 0; font-size: 18px; }
+  .taste { font-size: 13px; color: #aaa; line-height: 1.6; margin-top: 16px; }
+  .butoane { margin: 12px 0; display: flex; gap: 8px; }
+  .butoane button {
+    font-size: 22px; width: 56px; height: 56px;
+    background: #333; color: #fff; border: 1px solid #666; border-radius: 8px;
+  }
+  #mesaj { font-size: 20px; color: #ffcc00; height: 24px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>TETRIS</h1>
+
+<div class="joc">
+  <!-- "canvas" = suprafața pe care desenăm, ca un framebuffer -->
+  <canvas id="tabla" width="300" height="600"></canvas>
+
+  <div class="panou">
+    <p>Scor: <b id="scor">0</b></p>
+    <p>Linii: <b id="linii">0</b></p>
+    <p>Nivel: <b id="nivel">1</b></p>
+    <p>Următoarea:</p>
+    <canvas id="urmatoarea" width="120" height="120"></canvas>
+    <div class="taste">
+      ← → mutare<br>
+      ↑ rotire<br>
+      ↓ coborâre rapidă<br>
+      Spațiu: cădere directă<br>
+      P: pauză<br>
+      Enter: joc nou
+    </div>
+  </div>
+</div>
+
+<div id="mesaj"></div>
+
+<!-- Butoane pentru telefon (nu are tastatură) -->
+<div class="butoane">
+  <button onclick="actiune('stanga')">←</button>
+  <button onclick="actiune('roteste')">⟳</button>
+  <button onclick="actiune('dreapta')">→</button>
+  <button onclick="actiune('jos')">↓</button>
+  <button onclick="actiune('cadere')">⤓</button>
+</div>
+
+<script>
+// ===== LOGICA JOCULUI (JavaScript) =====
+
+// --- Constante ---
+const COLOANE = 10;
+const RANDURI = 20;
+const MARIME = 30; // mărimea unui pătrățel în pixeli
+
+// Cele 7 piese clasice, fiecare ca matrice. 0 = gol, alt număr = culoarea.
+const PIESE = [
+  [[1, 1, 1, 1]],             // I
+  [[2, 2], [2, 2]],           // O
+  [[0, 3, 0], [3, 3, 3]],     // T
+  [[0, 4, 4], [4, 4, 0]],     // S
+  [[5, 5, 0], [0, 5, 5]],     // Z
+  [[6, 0, 0], [6, 6, 6]],     // J
+  [[0, 0, 7], [7, 7, 7]],     // L
+];
+
+const CULORI = [
+  null,      // 0 = gol
+  '#00f0f0', // I - turcoaz
+  '#f0f000', // O - galben
+  '#a000f0', // T - mov
+  '#00f000', // S - verde
+  '#f00000', // Z - roșu
+  '#0000f0', // J - albastru
+  '#f0a000', // L - portocaliu
+];
+
+// --- Legătura cu elementele din pagină ---
+const ctx = document.getElementById('tabla').getContext('2d');
+const ctxUrm = document.getElementById('urmatoarea').getContext('2d');
+
+// --- Starea jocului ---
+let tabla;          // matrice RANDURI x COLOANE
+let piesa;          // piesa curentă: { forma, x, y }
+let urmatoarea;     // forma piesei următoare
+let scor, linii, nivel;
+let terminat, pauza;
+let ultimaCadere = 0;
+
+// Creează o tablă goală (o matrice plină cu 0)
+function tablaGoala() {
+  return Array.from({ length: RANDURI }, () => Array(COLOANE).fill(0));
+}
+
+// Alege o piesă la întâmplare
+function formaAleatoare() {
+  return PIESE[Math.floor(Math.random() * PIESE.length)];
+}
+
+// Pune următoarea piesă în joc, centrată sus
+function piesaNoua() {
+  const forma = urmatoarea || formaAleatoare();
+  urmatoarea = formaAleatoare();
+  piesa = {
+    forma: forma,
+    x: Math.floor((COLOANE - forma[0].length) / 2),
+    y: 0,
+  };
+  // Dacă piesa nouă se lovește imediat de ceva, jocul s-a terminat
+  if (coliziune(piesa.forma, piesa.x, piesa.y)) {
+    terminat = true;
+    document.getElementById('mesaj').textContent = 'GAME OVER – apasă Enter';
+  }
+}
+
+// Verifică dacă o formă, pusă la (x, y), iese din tablă sau atinge alte piese
+function coliziune(forma, x, y) {
+  for (let r = 0; r < forma.length; r++) {
+    for (let c = 0; c < forma[r].length; c++) {
+      if (forma[r][c] === 0) continue;
+      const tx = x + c;
+      const ty = y + r;
+      if (tx < 0 || tx >= COLOANE || ty >= RANDURI) return true;
+      if (ty >= 0 && tabla[ty][tx] !== 0) return true;
+    }
+  }
+  return false;
+}
+
+// Rotește o matrice cu 90° în sensul acelor de ceasornic
+function roteste(forma) {
+  const randuri = forma.length;
+  const coloane = forma[0].length;
+  const noua = [];
+  for (let c = 0; c < coloane; c++) {
+    noua.push([]);
+    for (let r = randuri - 1; r >= 0; r--) {
+      noua[c].push(forma[r][c]);
+    }
+  }
+  return noua;
+}
+
+// "Lipește" piesa curentă în tablă când nu mai poate coborî
+function fixeazaPiesa() {
+  piesa.forma.forEach((rand, r) => {
+    rand.forEach((val, c) => {
+      if (val !== 0) tabla[piesa.y + r][piesa.x + c] = val;
+    });
+  });
+  stergeLinii();
+  piesaNoua();
+}
+
+// Șterge rândurile complete și adaugă puncte
+function stergeLinii() {
+  let sterse = 0;
+  for (let r = RANDURI - 1; r >= 0; r--) {
+    if (tabla[r].every(val => val !== 0)) {
+      tabla.splice(r, 1);                 // scoatem rândul plin
+      tabla.unshift(Array(COLOANE).fill(0)); // adăugăm unul gol sus
+      sterse++;
+      r++; // verificăm din nou același index
+    }
+  }
+  if (sterse > 0) {
+    const puncte = [0, 100, 300, 500, 800];
+    scor += puncte[sterse] * nivel;
+    linii += sterse;
+    nivel = Math.floor(linii / 10) + 1;
+    actualizeazaPanou();
+  }
+}
+
+// --- Acțiunile jucătorului ---
+function actiune(ce) {
+  if (terminat || pauza) return;
+  if (ce === 'stanga' && !coliziune(piesa.forma, piesa.x - 1, piesa.y)) piesa.x--;
+  if (ce === 'dreapta' && !coliziune(piesa.forma, piesa.x + 1, piesa.y)) piesa.x++;
+  if (ce === 'jos') coboara();
+  if (ce === 'roteste') {
+    const rotita = roteste(piesa.forma);
+    // Încercăm rotirea pe loc; dacă nu încape, încercăm puțin la stânga/dreapta
+    for (const deplasare of [0, -1, 1, -2, 2]) {
+      if (!coliziune(rotita, piesa.x + deplasare, piesa.y)) {
+        piesa.forma = rotita;
+        piesa.x += deplasare;
+        break;
+      }
+    }
+  }
+  if (ce === 'cadere') {
+    while (!coliziune(piesa.forma, piesa.x, piesa.y + 1)) {
+      piesa.y++;
+      scor += 2;
+    }
+    fixeazaPiesa();
+    actualizeazaPanou();
+  }
+  deseneaza();
+}
+
+// Coboară piesa cu un rând; dacă nu se poate, o fixează
+function coboara() {
+  if (!coliziune(piesa.forma, piesa.x, piesa.y + 1)) {
+    piesa.y++;
+  } else {
+    fixeazaPiesa();
+  }
+}
+
+// --- Desenare ---
+function patrat(context, x, y, culoare, marime) {
+  context.fillStyle = culoare;
+  context.fillRect(x * marime, y * marime, marime - 1, marime - 1);
+}
+
+function deseneaza() {
+  // fundal
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, COLOANE * MARIME, RANDURI * MARIME);
+
+  // piesele deja căzute
+  for (let r = 0; r < RANDURI; r++) {
+    for (let c = 0; c < COLOANE; c++) {
+      if (tabla[r][c] !== 0) patrat(ctx, c, r, CULORI[tabla[r][c]], MARIME);
+    }
+  }
+
+  // piesa curentă
+  piesa.forma.forEach((rand, r) => {
+    rand.forEach((val, c) => {
+      if (val !== 0) patrat(ctx, piesa.x + c, piesa.y + r, CULORI[val], MARIME);
+    });
+  });
+
+  // piesa următoare, în panoul din dreapta
+  ctxUrm.fillStyle = '#000';
+  ctxUrm.fillRect(0, 0, 120, 120);
+  urmatoarea.forEach((rand, r) => {
+    rand.forEach((val, c) => {
+      if (val !== 0) patrat(ctxUrm, c + 1, r + 1, CULORI[val], 24);
+    });
+  });
+}
+
+function actualizeazaPanou() {
+  document.getElementById('scor').textContent = scor;
+  document.getElementById('linii').textContent = linii;
+  document.getElementById('nivel').textContent = nivel;
+}
+
+// --- Bucla principală a jocului ---
+// Browserul cheamă funcția asta de ~60 de ori pe secundă
+function bucla(timp) {
+  const viteza = Math.max(100, 800 - (nivel - 1) * 70); // ms între căderi
+  if (!terminat && !pauza && timp - ultimaCadere > viteza) {
+    coboara();
+    ultimaCadere = timp;
+    deseneaza();
+  }
+  requestAnimationFrame(bucla);
+}
+
+// --- Tastatura ---
+document.addEventListener('keydown', (e) => {
+  const taste = {
+    ArrowLeft: 'stanga',
+    ArrowRight: 'dreapta',
+    ArrowDown: 'jos',
+    ArrowUp: 'roteste',
+    ' ': 'cadere',
+  };
+  if (taste[e.key]) {
+    e.preventDefault(); // ca pagina să nu facă scroll
+    actiune(taste[e.key]);
+  }
+  if (e.key === 'p' || e.key === 'P') {
+    if (terminat) return;
+    pauza = !pauza;
+    document.getElementById('mesaj').textContent = pauza ? 'PAUZĂ' : '';
+  }
+  if (e.key === 'Enter' && terminat) jocNou();
+});
+
+// --- Pornirea ---
+function jocNou() {
+  tabla = tablaGoala();
+  scor = 0; linii = 0; nivel = 1;
+  terminat = false; pauza = false;
+  urmatoarea = null;
+  document.getElementById('mesaj').textContent = '';
+  piesaNoua();
+  actualizeazaPanou();
+  deseneaza();
+}
+
+jocNou();
+requestAnimationFrame(bucla);
+</script>
+
+</body>
+</html>
