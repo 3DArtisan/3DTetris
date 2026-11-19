@@ -431,7 +431,10 @@ document.addEventListener('keydown', (e) => {
     pauza = !pauza;
     document.getElementById('mesaj').textContent = pauza ? 'PAUZĂ' : '';
   }
-  if (e.key === 'Enter' && terminat) jocNou();
+  if (e.key === 'Enter') {
+  e.preventDefault(); // ca Enter să nu „apese” un buton de pe ecran
+  jocNou();
+}
 });
 
 // --- Pornirea ---
