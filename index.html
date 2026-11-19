@@ -326,6 +326,21 @@ function deseneaza() {
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
 
+  // Umbra piesei: arată unde ar ateriza piesa curentă dacă ar cădea acum.
+  // Coborâm o copie a poziției cât timp nu se lovește de nimic (ca la Spațiu).
+  let yUmbra = piesa.y;
+  while (!coliziune(piesa.forma, piesa.x, yUmbra + 1)) yUmbra++;
+  // O desenăm înaintea cuburilor, semi-transparentă, ca piesele adevărate s-o acopere
+  ctx.globalAlpha = 0.3;
+  piesa.forma.forEach((rand, r) => {
+    rand.forEach((val, c) => {
+      if (val === 0) return;
+      const x0 = piesa.x + c - W, y0 = yUmbra + r - H;
+      poligon([[x0, y0, 0], [x0 + 1, y0, 0], [x0 + 1, y0 + 1, 0], [x0, y0 + 1, 0]], CULORI[val], '#ffffff');
+    });
+  });
+  ctx.globalAlpha = 1; // revenim la opacitate normală pentru restul desenului
+
   // Punem laolaltă piesele căzute și piesa curentă într-o singură grilă
   const grila = tabla.map(rand => [...rand]);
   piesa.forma.forEach((rand, r) => {
