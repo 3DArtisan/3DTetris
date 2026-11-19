@@ -46,6 +46,7 @@
     <div class="taste">
       ← → mutare<br>
       ↑ rotire<br>
+      Q: oglindire<br>
       ↓ coborâre rapidă<br>
       Spațiu: cădere directă<br>
       P: pauză<br>
@@ -60,6 +61,7 @@
 <div class="butoane">
   <button onclick="actiune('stanga')">←</button>
   <button onclick="actiune('roteste')">⟳</button>
+  <button onclick="actiune('oglinda')">⇋</button>
   <button onclick="actiune('dreapta')">→</button>
   <button onclick="actiune('jos')">↓</button>
   <button onclick="actiune('cadere')">⤓</button>
@@ -161,6 +163,12 @@ function roteste(forma) {
   return noua;
 }
 
+// Oglindește o matrice stânga-dreapta (fiecare rând citit invers)
+// Exemplu: piesa S devine Z, piesa J devine L
+function oglindeste(forma) {
+  return forma.map(rand => [...rand].reverse());
+}
+
 // "Lipește" piesa curentă în tablă când nu mai poate coborî
 function fixeazaPiesa() {
   piesa.forma.forEach((rand, r) => {
@@ -204,6 +212,17 @@ function actiune(ce) {
     for (const deplasare of [0, -1, 1, -2, 2]) {
       if (!coliziune(rotita, piesa.x + deplasare, piesa.y)) {
         piesa.forma = rotita;
+        piesa.x += deplasare;
+        break;
+      }
+    }
+  }
+  if (ce === 'oglinda') {
+    const oglindita = oglindeste(piesa.forma);
+    // La fel ca la rotire: dacă nu încape pe loc, încercăm puțin lateral
+    for (const deplasare of [0, -1, 1]) {
+      if (!coliziune(oglindita, piesa.x + deplasare, piesa.y)) {
+        piesa.forma = oglindita;
         piesa.x += deplasare;
         break;
       }
@@ -290,6 +309,8 @@ document.addEventListener('keydown', (e) => {
     ArrowDown: 'jos',
     ArrowUp: 'roteste',
     ' ': 'cadere',
+    q: 'oglinda',
+    Q: 'oglinda',
   };
   if (taste[e.key]) {
     e.preventDefault(); // ca pagina să nu facă scroll
