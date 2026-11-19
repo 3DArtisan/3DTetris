@@ -176,6 +176,7 @@ function fixeazaPiesa() {
       if (val !== 0) tabla[piesa.y + r][piesa.x + c] = val;
     });
   });
+  scor += 5; // 5 puncte pentru fiecare piesă așezată
   stergeLinii();
   piesaNoua();
 }
@@ -224,6 +225,8 @@ function actiune(ce) {
       if (!coliziune(oglindita, piesa.x + deplasare, piesa.y)) {
         piesa.forma = oglindita;
         piesa.x += deplasare;
+        scor -= 10; // oglindirea costă 10 puncte
+        actualizeazaPanou();
         break;
       }
     }
